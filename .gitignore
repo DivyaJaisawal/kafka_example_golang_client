@@ -1,0 +1,13 @@
+### Go ###
+# External packages folder
+vendor/
+application.yml
+out/
+*.todo
+*.idea
+*.iml
+
+#IDE and mac
+.DS_Store
+tags
+.vscode
