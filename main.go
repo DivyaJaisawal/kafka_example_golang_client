@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	server1 "source.golabs.io/gopay_apps/kafka_example_golang_client/server"
+	server1 "kafka_example_golang_client/server"
 )
 
 func main() {

@@ -2,31 +2,60 @@ package handler_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
+	"fmt"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
-	"io/ioutil"
+	"net"
 	"net/http"
-	"net/http/httptest"
-	greet "source.golabs.io/gopay_apps/kafka_example_golang_client/proto"
-	server1 "source.golabs.io/gopay_apps/kafka_example_golang_client/server"
+	"kafka_example_golang_client/mock_greet"
+	pb "kafka_example_golang_client/proto"
+	http_server "kafka_example_golang_client/server"
 	"strings"
 	"testing"
 )
 
+func startService() (*grpc.Server, net.Listener, *mock_greet.MockService) {
+	server := grpc.NewServer()
+	svc := &mock_greet.MockService{}
+	pb.RegisterGreetingServiceServer(server, svc)
+	listener, _ := net.Listen("tcp", "localhost:50051")
+	go func() {
+		server.Serve(listener)
+	}()
+	return server, listener, svc
+}
+
 func TestShouldReturn200ForSuccessResponse(t *testing.T) {
+	_, listener, mockService := startService()
+	defer listener.Close()
+
+	mockService.On("Greeting", mock.Anything, mock.Anything).Return(&pb.HelloResponse {
+		Greeting: "hello",
+	}, nil)
+
+	router := http_server.Router()
+	http_server.Start(router)
+
+	request, err := http.NewRequest("POST", "http://localhost:8080/greet", strings.NewReader(`{"message": "Hello Divya Jaisawal"}`))
+
+	if err != nil {
+		fmt.Printf("error in connecting to http request: %v", err)
+	}
+	client := http.Client{}
+
+	response, err := client.Do(request)
+	fmt.Printf("got success response : %v", response)
+
 	const address = "localhost:50051"
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c := greet.NewGreetingServiceClient(conn)
-
-	// Test SayHello
-	t.Run("SayHello", func(t *testing.T) {
-		name := "world"
-		r, err := c.Greeting(context.Background(), &greet.HelloRequest{Message: name})
+	c := pb.NewGreetingServiceClient(conn)
+	t.Run("Greeting", func(t *testing.T) {
+		name := "hello"
+		r, err := c.Greeting(context.Background(), &pb.HelloRequest{Message: name})
 		if err != nil {
 			t.Fatalf("could not greet: %v", err)
 		}
@@ -34,79 +63,5 @@ func TestShouldReturn200ForSuccessResponse(t *testing.T) {
 		if r.Greeting != "Hello "+name {
 			t.Error("Expected 'Hello world', got ", r.Greeting)
 		}
-
 	})
-}
-
-type MockGreetService struct {
-	mock.Mock
-}
-
-func (m *MockGreetService) Greeting(ctx context.Context, r *greet.HelloRequest) (*greet.HelloResponse, error) {
-	args := m.Called(ctx, r)
-	return args[0].(*greet.HelloResponse), args.Error(1)
-}
-
-type TestContext struct {
-	t          *testing.T
-	deferFuncs []func()
-}
-
-func NewTestContext(t *testing.T) *TestContext {
-	return &TestContext{
-		t: t,
-	}
-}
-
-func TestApi(t *testing.T) {
-
-	//start the http server
-	router := server1.Router()
-	server1.Start(router)
-	//make a http
-	request := httptest.NewRequest("POST", "/localhost:8080/greet", strings.NewReader(`{"message": "Hello Divya Jaisawal"}`))
-	// create a client
-	client := http.Client{}
-	// make the request
-	response, _ := client.Do(request)
-	bytes, _ := ioutil.ReadAll(response.Body)
-
-/*	const address = "localhost:50051"
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := greet.NewGreetingServiceClient(conn)
-
-	// Test SayHello
-	t.Run("SayHello", func(t *testing.T) {
-		name := "world"
-		r, err := c.Greeting(context.Background(), &greet.HelloRequest{Message: name})
-		if err != nil {
-			t.Fatalf("could not greet: %v", err)
-		}
-		t.Logf("Greeting: %s", r.Greeting)
-		if r.Greeting != "Hello "+name {
-			t.Error("Expected 'Hello world', got ", r.Greeting)
-		}
-
-	})
-*/
-/*
-	client := greet.NewGreetingServiceClient(server.URL, hystrix.NewClient(), &logrus.Logger{})
-
-	request := CancelReservationRequest{
-		ReservationIdentifier: "rid",
-		WalletID:              "wid",
-		MerchantId:            "someMerchantId",
-		RequestID:             "request_id",
-	}
-
-	response, err := client.CancelReservation(request, nil)
-
-	assert.NoError(t, err)
-	assert.True(t, response.Success)
-	assert.Empty(t, response.Errors)
-	assert.JSONEq(t, `{"status": true}`, string(bytes))*/
 }

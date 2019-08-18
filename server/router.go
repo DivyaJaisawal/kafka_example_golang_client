@@ -2,11 +2,12 @@ package server1
 
 import (
 	"github.com/gorilla/mux"
-	"source.golabs.io/gopay_apps/kafka_example_golang_client/handler"
+	"kafka_example_golang_client/greet_client"
+	"kafka_example_golang_client/handler"
 )
 
-func Router() *mux.Router{
+func Router() *mux.Router {
 	r := mux.NewRouter()
-	r.Handle("/greet",handler.GreetHandler()).Methods("POST")
+	r.Handle("/greet", handler.GreetHandler(greet_client.GetClient())).Methods("POST")
 	return r
 }
