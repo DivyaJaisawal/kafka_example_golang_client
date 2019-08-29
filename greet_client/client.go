@@ -9,12 +9,8 @@ import (
 	"strconv"
 )
 
-func GetClient() greet.GreetingServiceClient{
-	uServiceConsul, err := consul_discover.NewConsulClient("localhost:8500")
-	if err != nil {
-		log.Fatalln("Can't find consul_discover:", err)
-	}
-	services, _, _ := uServiceConsul.Service("kafka-example", "kafka")
+func GetClient(uServiceConsul consul_discover.Client) greet.GreetingServiceClient{
+	services, _, err := uServiceConsul.Service("kafka-example", "kafka")
 	if err != nil {
 		log.Fatalln("Discover failed:", err)
 	}
@@ -23,11 +19,13 @@ func GetClient() greet.GreetingServiceClient{
 	log.Println("Found service at these locations:")
 	for _, v := range services {
 		log.Println(fmt.Sprintf("%s:%d", v.Node.Address, v.Service.Port))
-
 		conn, grpcErr = grpc.Dial(v.Node.Address+":"+ strconv.Itoa(v.Service.Port), grpc.WithInsecure())
 		if err != nil {
 			log.Fatalf("did not connect: %v", grpcErr)
 		}
+	}
+	if(conn == nil) {
+		panic("connection to grpc server failed")
 	}
 	return greet.NewGreetingServiceClient(conn)
 }

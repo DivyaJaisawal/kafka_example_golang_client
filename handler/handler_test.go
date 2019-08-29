@@ -1,22 +1,25 @@
 package handler_test
 
 import (
-	"context"
 	"fmt"
+	consul "github.com/hashicorp/consul/api"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
-	"net"
-	"net/http"
-	"kafka_example_golang_client/mock_greet"
+	"kafka_example_golang_client/mocks"
+	mockConsulClient "kafka_example_golang_client/mocks"
 	pb "kafka_example_golang_client/proto"
 	http_server "kafka_example_golang_client/server"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func startService() (*grpc.Server, net.Listener, *mock_greet.MockService) {
+func startService() (*grpc.Server, net.Listener, *mocks.MockService) {
 	server := grpc.NewServer()
-	svc := &mock_greet.MockService{}
+	svc := &mocks.MockService{}
 	pb.RegisterGreetingServiceServer(server, svc)
 	listener, _ := net.Listen("tcp", "localhost:50051")
 	go func() {
@@ -29,14 +32,30 @@ func TestShouldReturn200ForSuccessResponse(t *testing.T) {
 	_, listener, mockService := startService()
 	defer listener.Close()
 
-	mockService.On("Greeting", mock.Anything, mock.Anything).Return(&pb.HelloResponse {
+	mockService.On("Greeting", mock.Anything, mock.Anything).Return(&pb.HelloResponse{
 		Greeting: "hello",
 	}, nil)
 
-	router := http_server.Router()
-	http_server.Start(router)
+	mockConsulClient := &mockConsulClient.MockConsulClient{}
+	mockConsulClient.On("Service", "kafka-example",
+		"kafka").Return([]*consul.ServiceEntry{{
+		Node: &consul.Node{
+			ID:              "localhost",
+			Node:            "50051",
+			Address:         "localhost",
+			Datacenter:      "dc1",
+			TaggedAddresses: nil,
+			Meta:            nil,
+			CreateIndex:     0,
+			ModifyIndex:     0,},
+		Service: &consul.AgentService{Port: 50051},
+	}}, &consul.QueryMeta{}, nil)
 
-	request, err := http.NewRequest("POST", "http://localhost:8080/greet", strings.NewReader(`{"message": "Hello Divya Jaisawal"}`))
+	router := http_server.Router(mockConsulClient)
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	request, err := http.NewRequest("POST", server.URL+"/greet", strings.NewReader(`{"message": "Hello Divya Jaisawal"}`))
 
 	if err != nil {
 		fmt.Printf("error in connecting to http request: %v", err)
@@ -45,23 +64,6 @@ func TestShouldReturn200ForSuccessResponse(t *testing.T) {
 
 	response, err := client.Do(request)
 	fmt.Printf("got success response : %v", response)
-
-	const address = "localhost:50051"
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := pb.NewGreetingServiceClient(conn)
-	t.Run("Greeting", func(t *testing.T) {
-		name := "hello"
-		r, err := c.Greeting(context.Background(), &pb.HelloRequest{Message: name})
-		if err != nil {
-			t.Fatalf("could not greet: %v", err)
-		}
-		t.Logf("Greeting: %s", r.Greeting)
-		if r.Greeting != "Hello "+name {
-			t.Error("Expected 'Hello world', got ", r.Greeting)
-		}
-	})
+	assert.NotNil(t, response)
+	assert.Equal(t, 200,response.StatusCode)
 }
