@@ -7,8 +7,8 @@ import (
 	"kafka_example_golang_client/handler"
 )
 
-func Router(consulcli consul_discover.Client) *mux.Router {
+func Router(consulCli consul_discover.Client) *mux.Router {
 	r := mux.NewRouter()
-	r.Handle("/greet", handler.GreetHandler(greet_client.GetClient(consulcli))).Methods("POST")
+	r.Handle("/greet", handler.GreetHandler(greet_client.GetClient(consulCli))).Methods("POST")
 	return r
 }

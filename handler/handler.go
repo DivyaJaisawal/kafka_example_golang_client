@@ -6,7 +6,6 @@ import (
 	greet "kafka_example_golang_client/proto"
 	"log"
 	"net/http"
-
 	"strconv"
 )
 
